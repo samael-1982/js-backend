@@ -1,45 +1,51 @@
-const express = require('express');
-const db = require('./db');
+const PORT = process.env.PORT || 3000;
+const express = require("express");
+const cors = require("cors");
+const sqlite3 = require("sqlite3").verbose();
 
 const app = express();
+
+
+app.use(cors());
 app.use(express.json());
 
-// CORS
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "*");
-  next();
+const db = new sqlite3.Database("./points.db");
+
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS points (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      x INTEGER NOT NULL,
+      y INTEGER NOT NULL
+    )
+  `);
 });
 
-// health check
-app.get('/', (req, res) => {
-  res.json({ status: 'ok' });
-});
-
-// GET /points
-app.get('/points', (req, res) => {
-  db.all("SELECT * FROM points", [], (err, rows) => {
-    if (err) return res.status(500).json(err);
-    res.json(rows);
-  });
-});
-
-// 👉 POST /points
-app.post('/points', (req, res) => {
+// Save point
+app.post("/points", (req, res) => {
   const { x, y } = req.body;
-
   db.run(
-    "INSERT INTO points(x, y) VALUES(?, ?)",
+    "INSERT INTO points (x, y) VALUES (?, ?)",
     [x, y],
     function (err) {
-      if (err) return res.status(500).json(err);
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
       res.json({ id: this.lastID, x, y });
     }
   );
 });
 
-const PORT = process.env.PORT || 3000;
+// Get all points
+app.get("/points", (req, res) => {
+  db.all("SELECT x, y FROM points", [], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows);
+  });
+});
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
